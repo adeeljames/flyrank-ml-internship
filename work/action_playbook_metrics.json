@@ -1,0 +1,15 @@
+{
+  "model": "RandomForestClassifier",
+  "validation": "client-grouped holdout (GroupShuffleSplit, test_size=0.2)",
+  "precision_at_50_holdout": 0.64,
+  "week4_baseline_precision_at_50": 0.62,
+  "week5_model_precision_at_50": 0.64,
+  "n_rows_scored": 30000,
+  "reason_code_counts": {
+    "declining_with_demand": 13136,
+    "monitor_only": 11723,
+    "low_ctr_visible_page": 3639,
+    "model_decline_risk": 1485,
+    "stale_visible_page": 17
+  }
+}
