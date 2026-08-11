@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ranking the Refresh Queue — A Content Opportunity Scoring Study on FlyRank Search Data</title>
+<meta name="description" content="A capstone research paper on refresh/content opportunity scoring, built on the FlyRank ML Internship dataset.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F6F5F0;
+    --paper-card:#EFEDE4;
+    --ink:#1B1F23;
+    --ink-soft:#4B5157;
+    --rule:#D9D4C6;
+    --teal:#14555A;
+    --teal-deep:#0E3D40;
+    --amber:#A9772E;
+    --amber-soft:#F1E6D2;
+    --red-soft:#F3E3DE;
+    --red:#9A4A34;
+    --max:920px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} *{animation:none !important; transition:none !important;} }
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:17px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    line-height:1.12;
+    letter-spacing:-0.01em;
+    margin:0 0 0.4em 0;
+    color:var(--ink);
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  a{color:var(--teal); text-decoration-thickness: 1.5px; text-underline-offset: 2px;}
+  a:focus-visible, button:focus-visible{outline:3px solid var(--teal); outline-offset:2px;}
+
+  .wrap{max-width:var(--max); margin:0 auto; padding:0 24px;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:rgba(246,245,240,0.92);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--rule);
+  }
+  .topbar .wrap{display:flex; align-items:center; justify-content:space-between; padding:14px 24px;}
+  .brandmark{font-family:'IBM Plex Mono'; font-size:13px; letter-spacing:0.06em; color:var(--ink-soft);}
+  .brandmark strong{color:var(--ink);}
+  .toc{display:flex; gap:18px; font-family:'IBM Plex Mono'; font-size:12.5px;}
+  .toc a{color:var(--ink-soft); text-decoration:none; letter-spacing:0.02em;}
+  .toc a:hover{color:var(--teal);}
+  @media (max-width:760px){ .toc{display:none;} }
+
+  /* ---------- Hero ---------- */
+  .hero{padding:76px 0 56px; border-bottom:1px solid var(--rule);}
+  .eyebrow{
+    font-family:'IBM Plex Mono'; font-size:12.5px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--teal); margin-bottom:18px; display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{content:""; width:22px; height:1px; background:var(--teal); display:inline-block;}
+  .hero h1{font-size:clamp(2.1rem, 4.2vw, 3.15rem); max-width:15ch;}
+  .hero .sub{font-size:1.15rem; color:var(--ink-soft); max-width:56ch; margin-top:14px;}
+
+  .hero-grid{display:grid; grid-template-columns: 1.3fr 1fr; gap:40px; margin-top:44px; align-items:start;}
+  @media (max-width:800px){ .hero-grid{grid-template-columns:1fr;} }
+
+  .abstract{
+    background:var(--paper-card); border:1px solid var(--rule); border-radius:4px;
+    padding:24px 26px;
+  }
+  .abstract .label{font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:10px;}
+  .abstract p{margin:0; font-size:0.98rem; color:var(--ink);}
+
+  /* ---------- Rank stack (signature element) ---------- */
+  .rankstack{border:1px solid var(--rule); border-radius:4px; overflow:hidden; background:#fff;}
+  .rankstack .rs-head{
+    padding:12px 16px; font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--ink-soft); border-bottom:1px solid var(--rule); background:var(--paper-card);
+  }
+  .rs-row{display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--rule);}
+  .rs-row:last-child{border-bottom:none;}
+  .rs-num{font-family:'IBM Plex Mono'; font-size:12px; color:var(--ink-soft); width:22px;}
+  .rs-bar-track{flex:1; height:8px; background:var(--paper-card); border-radius:2px; overflow:hidden;}
+  .rs-bar{height:100%; background:var(--teal); border-radius:2px;}
+  .rs-score{font-family:'IBM Plex Mono'; font-size:12px; color:var(--ink); width:44px; text-align:right;}
+
+  /* ---------- Sections ---------- */
+  section{padding:56px 0; border-bottom:1px solid var(--rule);}
+  section:last-of-type{border-bottom:none;}
+  section h2{font-size:1.7rem; margin-bottom:6px;}
+  .section-num{font-family:'IBM Plex Mono'; color:var(--teal); font-size:0.85rem;}
+  p{margin:0 0 1em 0;}
+  .lede{font-size:1.05rem; color:var(--ink-soft); max-width:70ch;}
+
+  table{width:100%; border-collapse:collapse; margin:18px 0; font-size:0.92rem;}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule);}
+  th{font-family:'IBM Plex Mono'; font-size:11.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-soft); font-weight:500;}
+  td.num, th.num{text-align:right; font-family:'IBM Plex Mono';}
+  tr:last-child td{border-bottom:none;}
+  .table-wrap{overflow-x:auto; border:1px solid var(--rule); border-radius:4px; background:#fff; padding:4px 10px;}
+
+  .stat-row{display:flex; gap:28px; flex-wrap:wrap; margin:22px 0;}
+  .stat{min-width:140px;}
+  .stat .num{font-family:'Fraunces'; font-size:2.1rem; font-weight:600; color:var(--teal); line-height:1;}
+  .stat .lbl{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--ink-soft); margin-top:6px; letter-spacing:0.02em;}
+
+  .callout{border-left:3px solid var(--amber); background:var(--amber-soft); padding:14px 18px; border-radius:0 4px 4px 0; margin:20px 0; font-size:0.95rem;}
+  .callout .tag{font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--amber); display:block; margin-bottom:6px;}
+  .callout.danger{border-color:var(--red); background:var(--red-soft);}
+  .callout.danger .tag{color:var(--red);}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+  @media (max-width:700px){ .grid-2{grid-template-columns:1fr;} }
+  .card{background:#fff; border:1px solid var(--rule); border-radius:4px; padding:18px 20px;}
+  .card h3{font-size:1.05rem; margin-bottom:6px;}
+  .card .meta{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--ink-soft); margin-bottom:10px;}
+
+  .bar-chart{margin:20px 0;}
+  .bar-row{display:grid; grid-template-columns:170px 1fr 70px; align-items:center; gap:10px; margin-bottom:10px; font-size:0.88rem;}
+  .bar-row .name{color:var(--ink-soft); font-family:'IBM Plex Mono'; font-size:11.5px;}
+  .bar-track{height:14px; background:var(--paper-card); border-radius:2px; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:2px;}
+  .bar-fill.teal{background:var(--teal);}
+  .bar-fill.amber{background:var(--amber);}
+  .bar-val{font-family:'IBM Plex Mono'; font-size:11.5px; text-align:right;}
+
+  .tier-tag{
+    display:inline-block; font-family:'IBM Plex Mono'; font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase;
+    padding:2px 8px; border-radius:999px; border:1px solid var(--rule); color:var(--ink-soft); background:var(--paper-card);
+  }
+
+  ol.playbook{list-style:none; padding:0; margin:20px 0; counter-reset:pb;}
+  ol.playbook li{counter-increment:pb; display:flex; gap:14px; padding:14px 0; border-bottom:1px solid var(--rule);}
+  ol.playbook li:last-child{border-bottom:none;}
+  ol.playbook li::before{
+    content: counter(pb);
+    font-family:'IBM Plex Mono'; font-size:12px; color:var(--teal);
+    width:26px; height:26px; border:1px solid var(--teal); border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px;
+  }
+  .pb-body h4{margin:0 0 4px 0; font-family:'IBM Plex Sans'; font-size:1rem; font-weight:600;}
+  .pb-body p{margin:0; color:var(--ink-soft); font-size:0.92rem;}
+
+  .nogo li{margin-bottom:8px;}
+  ul{padding-left:1.2em;}
+
+  footer{padding:44px 0 60px; text-align:left;}
+  .credit-box{
+    border:1px solid var(--rule); background:var(--paper-card); border-radius:4px; padding:22px 24px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+  }
+  .credit-box .left{max-width:60ch;}
+  .credit-box a.button{
+    display:inline-block; font-family:'IBM Plex Mono'; font-size:12.5px; letter-spacing:0.04em;
+    background:var(--teal-deep); color:#fff; padding:10px 18px; border-radius:3px; text-decoration:none;
+  }
+  .credit-box a.button:hover{background:var(--teal);}
+  .repro-links{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+  .repro-links a{font-family:'IBM Plex Mono'; font-size:0.9rem;}
+
+  .fig-caption{font-size:0.85rem; color:var(--ink-soft); margin-top:8px; font-family:'IBM Plex Mono';}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brandmark">by <strong><a href="https://www.linkedin.com/in/muhammadadeelai/" target="_blank" rel="noopener" style="color:var(--ink); text-decoration:none; border-bottom:1px solid var(--rule);">@muhammadadeelai</a></strong> · ML Internship Capstone · FlyRank</div>
+    <nav class="toc">
+      <a href="#data">Data</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#limits">Limits</a>
+      <a href="#playbook">Playbook</a>
+      <a href="#repro">Reproduce</a>
+    </nav>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Search Intelligence · Refresh &amp; Content Opportunity Scoring</div>
+    <h1>Ranking the Refresh Queue</h1>
+    <p class="sub">A client-holdout study of which signals — staleness, visibility, position, or CTR — actually predict declining content, and whether a learned ranking beats a transparent hand rule on real FlyRank search data.</p>
+
+    <div class="hero-grid">
+      <div class="abstract">
+        <div class="label">Abstract</div>
+        <p>
+          Content teams have limited review capacity and need to know which pages to look at first.
+          I built a Refresh / Content Opportunity Scoring pipeline on the FlyRank ML Internship dataset —
+          a 30,000-page anonymized starter slice plus a 9.8-million-row verification cut of the full
+          warehouse — to rank pages by likelihood of decline. A hand-written baseline rule
+          (staleness × visibility) scored <span class="mono">0.620</span> Precision@50 under a client-holdout
+          split; a Random Forest trained on ten observable signals scored <span class="mono">0.640</span> —
+          a real but modest lift. The model's top predictors were raw visibility (impressions,
+          position) rather than staleness, which my own signal audit had already flagged as an
+          unreliable single-condition rule. The result is a ranked, reason-coded review queue,
+          not an automated editing system, with explicit human-review and no-go rules attached.
+        </p>
+      </div>
+
+      <div class="rankstack">
+        <div class="rs-head">Model vs. baseline — Precision@50</div>
+        <div class="rs-row">
+          <span class="rs-num">01</span>
+          <span style="width:120px; font-family:'IBM Plex Mono'; font-size:12px;">Random Forest</span>
+          <span class="rs-bar-track"><span class="rs-bar" style="width:64%; background:var(--teal);"></span></span>
+          <span class="rs-score">0.640</span>
+        </div>
+        <div class="rs-row">
+          <span class="rs-num">02</span>
+          <span style="width:120px; font-family:'IBM Plex Mono'; font-size:12px;">My baseline rule</span>
+          <span class="rs-bar-track"><span class="rs-bar" style="width:62%; background:var(--ink-soft);"></span></span>
+          <span class="rs-score">0.620</span>
+        </div>
+        <div class="rs-row">
+          <span class="rs-num">03</span>
+          <span style="width:120px; font-family:'IBM Plex Mono'; font-size:12px;">Logistic Regression</span>
+          <span class="rs-bar-track"><span class="rs-bar" style="width:56%; background:var(--amber);"></span></span>
+          <span class="rs-score">0.560</span>
+        </div>
+        <div class="rs-row" style="border-top:1px dashed var(--rule); padding-top:12px;">
+          <span class="rs-num" style="color:var(--red);">–</span>
+          <span style="width:120px; font-family:'IBM Plex Mono'; font-size:12px; color:var(--ink-soft);">Random guess</span>
+          <span class="rs-bar-track"><span class="rs-bar" style="width:50%; background:var(--rule);"></span></span>
+          <span class="rs-score">0.500</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="intro">
+  <div class="wrap">
+    <div class="section-num">§1</div>
+    <h2>Introduction — the decision this supports</h2>
+    <p class="lede">
+      A content team cannot review every page every week. The practical question is not
+      "is this page declining," in the abstract — it is: <em>of everything in the inventory,
+      which pages should a reviewer look at first?</em> That is a ranking problem, not a
+      one-off classification problem, and it is exactly the framing I committed to in Week 1
+      of this track.
+    </p>
+    <p>
+      I chose the <strong>Refresh / Content Opportunity Scoring</strong> lane. The unit of
+      analysis is one content page, for one client, and the output is a ranked queue with a
+      reason code attached to every row, so a reviewer can see not just <em>that</em> a page
+      was flagged but <em>why</em>. The action a reviewer takes — refresh, rewrite title/meta,
+      review, or monitor — is only ever a recommendation. Nothing in this pipeline edits or
+      publishes anything on its own.
+    </p>
+    <div class="stat-row">
+      <div class="stat"><div class="num">54.2%</div><div class="lbl">pages in a "down" trend, starter slice</div></div>
+      <div class="stat"><div class="num">731</div><div class="lbl">median 90-day impressions per page</div></div>
+      <div class="stat"><div class="num">0.1%</div><div class="lbl">pages both stale AND highly visible</div></div>
+    </div>
+    <p>
+      That last number was an early, useful surprise: a rule combining "not updated in 180+
+      days" with "still gets 500+ impressions" only matched one page in a thousand. A staleness
+      rule alone would review almost nothing — which is the first sign that decline in this
+      portfolio is driven by more than time-since-update.
+    </p>
+  </div>
+</section>
+
+<section id="data">
+  <div class="wrap">
+    <div class="section-num">§2</div>
+    <h2>Data</h2>
+    <p class="lede">
+      Two slices of the FlyRank ML Internship dataset, used for two different jobs: a small
+      public starter slice for iteration and the main results in this paper, and a verification
+      cut of the full warehouse to prove the data contract holds at scale.
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="meta">Starter slice · <span class="mono">data/raw/content_refresh_anonymized.csv</span></div>
+        <h3>30,000 pages</h3>
+        <p style="font-size:0.92rem; color:var(--ink-soft);">
+          One row per content page. Observable signals only — impressions, clicks, position,
+          CTR, word count, staleness, engagement — never FlyRank's own product decision flags
+          (health_score, priority_score, action_type). This is the slice all results in this
+          paper are computed on.
+        </p>
+      </div>
+      <div class="card">
+        <div class="meta">Warehouse verification · <span class="mono">fact_content_daily_performance</span>, month=2026-03</div>
+        <h3>9,841,378 rows</h3>
+        <p style="font-size:0.92rem; color:var(--ink-soft);">
+          55 clients, 331,437 content items, one row per content×client×day (grain confirmed:
+          zero duplicate keys). Used in Week 3 to prove my data contract holds against the real
+          warehouse, and to sanity-check availability: 413,966 of 9.8M rows had a usable
+          <span class="mono">ga4_data_available = TRUE</span> flag.
+        </p>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>What I deliberately excluded</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Product decision flags (health_score, priority_score, action_type)</td><td>Not shipped by design — using them would let a model copy an existing rule instead of finding real signal</td></tr>
+        <tr><td>trend_pct as a feature</td><td>It is the exact value the label is derived from — confirmed as a leakage trap on real warehouse data in Week 3</td></tr>
+        <tr><td>Client names, domains, raw URLs, raw queries</td><td>Never present in the released data; nothing to strip</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <span class="tag">Data note</span>
+      The warehouse panel is unbalanced — only 9 of 70 clients have 12+ months of tracking
+      history. My March-2026 verification slice is a single mid-panel month and should not be
+      read as representative of every client's full history.
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <div class="section-num">§3</div>
+    <h2>Methodology</h2>
+
+    <h3 style="margin-top:0.4em;">Label</h3>
+    <p>
+      <span class="mono">is_declining_label = (trend_direction == "down")</span> — a
+      current-window proxy, not a validated future outcome. I treat this explicitly as a
+      starting point; a stronger label would use a prior-90-day feature window against a
+      next-30-day decline outcome.
+    </p>
+
+    <h3>Signal audit (Week 4)</h3>
+    <p>Before encoding any rule, I tested two signals against real FlyRank flag logic:</p>
+    <div class="grid-2">
+      <div class="card">
+        <div class="meta">Staleness → refresh flags</div>
+        <h3 style="font-size:1rem;">Verdict: <span style="color:var(--amber);">MIXED</span></h3>
+        <p style="font-size:0.88rem; color:var(--ink-soft);">Decline rate rose from 0.512 (&lt;90d) to 0.611 (90–180d), then fell to 0.467 (180–365d, n=169) and 0.600 (365d+, n=5, too small to trust). No clean staircase.</p>
+      </div>
+      <div class="card">
+        <div class="meta">CTR vs. position tier → CTR-fix logic</div>
+        <h3 style="font-size:1rem;">Verdict: <span style="color:var(--teal);">CONFIRMED</span></h3>
+        <p style="font-size:0.88rem; color:var(--ink-soft);">CTR fell monotonically: 0.355 (page 1) → 0.334 (top 3) → 0.256 (striking) → 0.142 (page 3–5) → 0.055 (deep).</p>
+      </div>
+    </div>
+
+    <h3>Baseline (Week 4)</h3>
+    <p>
+      One transparent rule: <span class="mono">score = stale(180d+) × visible(500+ impr) × impressions_90d</span>,
+      reason code <span class="mono">stale_visible_page</span>. Precision@50 = <strong>0.620</strong>
+      on a client-holdout test set. A top-10 review surfaced a real weakness: every one of the
+      top 10 rows came from a single client, which meant the rule was letting one high-traffic
+      client dominate the whole review queue.
+    </p>
+
+    <h3>Model (Week 5–6)</h3>
+    <p>
+      Logistic Regression and Random Forest, chosen for the same reason: the ranking output is
+      the predicted probability, and a hand rule already showed 0.620 is a strong baseline to
+      beat. Features: <span class="mono">search_volume, word_count, impressions_90d, sessions_90d,
+      content_age_days, days_since_last_update, avg_position, ctr, engagement_rate, scroll_rate</span>.
+    </p>
+
+    <h3>Validation design</h3>
+    <p>
+      <strong>Client-grouped holdout</strong> (GroupShuffleSplit, 20% of clients held out
+      entirely) — not a random row split. My Week-4 top-10 review showed pages from the same
+      client can dominate a naive ranking; a random split risks leaking a client's pattern
+      between train and test. Zero client overlap between train and test was confirmed
+      programmatically.
+    </p>
+
+    <h3>Leakage audit</h3>
+    <ul>
+      <li><span class="mono">trend_direction</span> / <span class="mono">trend_pct</span> excluded from every feature set — confirmed by assertion.</li>
+      <li>No FlyRank product decision flags used, at any stage.</li>
+      <li>Deliberate leak experiment (Week 3, on real warehouse data): adding the label-source column pushed a toy classifier's accuracy toward-perfect; removing it restored the honest number.</li>
+      <li>Unlike the reference FlyRank research paper's own Health-Score model — where Average Position and Impressions are both inputs <em>and</em> components of the target — my label is not a linear function of my features, so that specific circularity risk does not apply here.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <div class="section-num">§4</div>
+    <h2>Results</h2>
+    <p class="lede">All numbers below are computed on the held-out test clients only — pages the model never saw during training.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th class="num">Precision@50</th><th class="num">ROC AUC</th><th class="num">Avg. Precision</th></tr></thead>
+        <tbody>
+          <tr><td>My Week-4 baseline rule</td><td class="num">0.620</td><td class="num">—</td><td class="num">—</td></tr>
+          <tr><td>Logistic Regression</td><td class="num">0.560</td><td class="num">0.530</td><td class="num">0.520</td></tr>
+          <tr><td><strong>Random Forest</strong></td><td class="num"><strong>0.640</strong></td><td class="num">0.598</td><td class="num">0.587</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What the model actually leaned on</h3>
+    <div class="bar-chart">
+      <div class="bar-row"><span class="name">impressions_90d</span><span class="bar-track"><span class="bar-fill teal" style="width:100%"></span></span><span class="bar-val">0.283</span></div>
+      <div class="bar-row"><span class="name">avg_position</span><span class="bar-track"><span class="bar-fill teal" style="width:72%"></span></span><span class="bar-val">0.203</span></div>
+      <div class="bar-row"><span class="name">content_age_days</span><span class="bar-track"><span class="bar-fill teal" style="width:56%"></span></span><span class="bar-val">0.159</span></div>
+      <div class="bar-row"><span class="name">word_count</span><span class="bar-track"><span class="bar-fill teal" style="width:40%"></span></span><span class="bar-val">0.112</span></div>
+      <div class="bar-row"><span class="name">ctr</span><span class="bar-track"><span class="bar-fill amber" style="width:22%"></span></span><span class="bar-val">0.063</span></div>
+      <div class="bar-row"><span class="name">scroll_rate</span><span class="bar-track"><span class="bar-fill amber" style="width:17%"></span></span><span class="bar-val">0.049</span></div>
+      <div class="bar-row"><span class="name">sessions_90d</span><span class="bar-track"><span class="bar-fill amber" style="width:17%"></span></span><span class="bar-val">0.049</span></div>
+      <div class="bar-row"><span class="name">days_since_last_update</span><span class="bar-track"><span class="bar-fill amber" style="width:16%"></span></span><span class="bar-val">0.045</span></div>
+      <div class="bar-row"><span class="name">search_volume</span><span class="bar-track"><span class="bar-fill amber" style="width:7%"></span></span><span class="bar-val">0.019</span></div>
+      <div class="bar-row"><span class="name">engagement_rate</span><span class="bar-track"><span class="bar-fill amber" style="width:6%"></span></span><span class="bar-val">0.018</span></div>
+    </div>
+    <p class="fig-caption">Fig. 1 — Random Forest feature importance, client-holdout test set.</p>
+
+    <p>
+      <span class="mono">days_since_last_update</span> — the core signal my own baseline rule
+      was built around — ranked 7th, at 4.5% importance. That lines up with the MIXED verdict
+      from my Week-4 signal audit: staleness is real but weak on its own, and raw visibility
+      (impressions, position, age) carries more of the model's decision.
+    </p>
+
+    <h3>Error inspection</h3>
+    <p>
+      18 of the model's top 50 recommendations (36%) were false positives. Every one of them
+      shared a specific pattern: <span class="mono">ctr = 0.00</span> despite real impressions
+      (264–1,525) and a mid-range position (17–32). That is unusual enough — real impressions
+      with zero clicks — to suggest a data-quality issue rather than genuine decline, and it is
+      now a documented review step (see §6).
+    </p>
+
+    <div class="callout">
+      <span class="tag">Honest read</span>
+      ROC AUC (0.598) and Average Precision (0.587) are modest — closer to random (0.500) than
+      to a strong classifier. With ten observable features and a current-window proxy label,
+      there is limited separable signal to find. The more promising next step is a better
+      <em>label</em> — a genuine future-window decline outcome — not a more complex model.
+    </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <div class="section-num">§5</div>
+    <h2>Limitations &amp; honest framing</h2>
+    <ul>
+      <li>The label is a current-window proxy (<span class="mono">trend_direction == "down"</span>), not a validated future outcome.</li>
+      <li>Results are computed on a 30,000-row anonymized starter slice — not the full ~79M-row warehouse.</li>
+      <li>Model quality is modest (ROC AUC ≈ 0.60); treat scores as a rough prioritization aid, not a precise probability.</li>
+      <li>Nothing here proves a refresh <em>causes</em> recovery — that would require an experimental or causal design this dataset cannot provide.</li>
+      <li>Consolidation, seasonality, and SERP layout changes are not modeled — a "declining" flag could reflect any of these instead of genuine content decay.</li>
+      <li>This is decision-support for a human reviewer. It is not, and should not become, an automated editing or publishing system.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="playbook">
+  <div class="wrap">
+    <div class="section-num">§6</div>
+    <h2>Ranked recommendations — the action playbook</h2>
+    <p class="lede">Every row in the shipped queue carries a reason code and maps to one recommended action. Distribution across 30,000 pages:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Reason code</th><th>Meaning</th><th>Action</th><th class="num">Pages</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">declining_with_demand</td><td>Trending down, 100+ impressions</td><td>refresh</td><td class="num">13,136</td></tr>
+          <tr><td class="mono">monitor_only</td><td>No strong signal either way</td><td>monitor</td><td class="num">11,723</td></tr>
+          <tr><td class="mono">low_ctr_visible_page</td><td>Ranks 1–20, CTR &lt; 0.5, 500+ impressions</td><td>rewrite title/meta</td><td class="num">3,639</td></tr>
+          <tr><td class="mono">model_decline_risk</td><td>Model probability ≥ 0.65</td><td>review</td><td class="num">1,485</td></tr>
+          <tr><td class="mono">stale_visible_page</td><td>180+ days stale, 500+ impressions</td><td>refresh</td><td class="num">17</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ol class="playbook">
+      <li>
+        <div class="pb-body">
+          <h4>Refresh mature, visibility-holding pages first</h4>
+          <p>Prioritize <span class="mono">declining_with_demand</span> and <span class="mono">stale_visible_page</span> rows — real audience already exists, so a refresh has somewhere to land.</p>
+        </div>
+      </li>
+      <li>
+        <div class="pb-body">
+          <h4>Fix titles and snippets on page-1 CTR laggards</h4>
+          <p><span class="mono">low_ctr_visible_page</span> rows already rank — the fastest lever is often the click, not the content.</p>
+        </div>
+      </li>
+      <li>
+        <div class="pb-body">
+          <h4>Sanity-check zero-CTR pages before trusting the score</h4>
+          <p>Every documented false positive had <span class="mono">ctr = 0.00</span> with real impressions — verify tracking before spending reviewer time.</p>
+        </div>
+      </li>
+      <li>
+        <div class="pb-body">
+          <h4>Treat <span class="mono">monitor_only</span> as "no action," not "no value"</h4>
+          <p>39% of pages land here. That is a finding, not a gap — most of the inventory doesn't need intervention this cycle.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Human review — required, always</h3>
+        <ul class="nogo">
+          <li>Confirm the reason code against the underlying numbers.</li>
+          <li>Rule out consolidation — did a sibling page absorb this one's traffic?</li>
+          <li>Rule out seasonality before calling anything a "decline."</li>
+          <li>Skip any page under 100 impressions/90d — too little volume to trust.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What must NOT be automated</h3>
+        <ul class="nogo">
+          <li>Auto-publishing AI-rewritten content from a score alone.</li>
+          <li>Auto-pruning "monitor" or low-score pages without human confirmation.</li>
+          <li>Using this queue for staffing or headcount decisions.</li>
+          <li>Treating any single score as proof a page needs work.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="tag">Monitoring &amp; retrain triggers</span>
+      Re-score monthly, not continuously. Retrain if held-out Precision@50 drops more than ~15%
+      relative to this paper's baseline (0.640), if a new data snapshot arrives, or if the label
+      definition changes to a future-window outcome.
+    </div>
+  </div>
+</section>
+
+<section id="repro">
+  <div class="wrap">
+    <div class="section-num">§7</div>
+    <h2>Reproducibility</h2>
+    <p class="lede">Every number in this paper traces back to a notebook in the repo below. Clone it, run the pipeline, and you should reproduce the same client-holdout results.</p>
+    <div class="repro-links">
+      <a href="https://github.com/adeeljames/flyrank-ml-internship" target="_blank" rel="noopener">→ Full repository — adeeljames/flyrank-ml-internship</a>
+      <a href="https://www.linkedin.com/in/muhammadadeelai/" target="_blank" rel="noopener">→ Author — @muhammadadeelai on LinkedIn</a>
+      <a href="https://github.com/adeeljames/flyrank-ml-internship/blob/main/work/notebooks/w04_baseline_score.ipynb" target="_blank" rel="noopener">→ w04_baseline_score.ipynb — signal audit &amp; baseline</a>
+      <a href="https://github.com/adeeljames/flyrank-ml-internship/blob/main/work/notebooks/w05_model.ipynb" target="_blank" rel="noopener">→ w05_model.ipynb — model training</a>
+      <a href="https://github.com/adeeljames/flyrank-ml-internship/blob/main/work/notebooks/w06_validation_audit.ipynb" target="_blank" rel="noopener">→ w06_validation_audit.ipynb — honest split &amp; leakage audit</a>
+      <a href="https://github.com/adeeljames/flyrank-ml-internship/blob/main/work/notebooks/w07_action_playbook.ipynb" target="_blank" rel="noopener">→ w07_action_playbook.ipynb — ranked queue &amp; exports</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="credit-box">
+      <div class="left">
+        <strong>Built on the FlyRank ML Internship dataset.</strong>
+        <p style="margin:4px 0 0; color:var(--ink-soft); font-size:0.9rem;">Anonymized, pseudonymized real-world search and content data, provided for research and educational use.</p>
+      </div>
+      <a class="button" href="https://flyrank.ai" target="_blank" rel="noopener">flyrank.ai →</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
